@@ -40,4 +40,38 @@ PLAYGROUND_MATMUL_SIG(float16_t, 1, M, N, K, A, B, C);
  */
 PLAYGROUND_MATMUL_SIG(float32_t, 1, M, N, K, A, B, C);
 
+/**
+ * @brief Matrix multiplication, fp32-v2, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 2, M, N, K, A, B, C);
+
+/**
+ * @brief Matrix multiplication, fp32-v3, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 3, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v4, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 4, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v5, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 5, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v6, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 6, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v7, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 7, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v8, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 8, M, N, K, A, B, C);
+/**
+ * @brief Matrix multiplication, fp32-v9, cuda.
+ */
+PLAYGROUND_MATMUL_SIG(float32_t, 9, M, N, K, A, B, C);
+
 }  // namespace playground

@@ -62,6 +62,7 @@ auto main() -> int
     // If not using cblas, execute the function multiple times to get average
     // runtime
     if constexpr (playground::params::MatmulVersion != 0) {
+
         for (auto i = 0ULL;
              i < playground::params::NumRep + playground::params::NumWarmup;
              ++i) {
@@ -115,6 +116,7 @@ auto main() -> int
                                playground::params::N * playground::params::K;
     double tflops =
         (flopsPerMatrixMul * 1.0e-12f) / (msecPerMatrixMul / 1000.0f);
+
 
     printf("[Playground] Result >>> TFLOPS: %lf; Average Error: %f\n", tflops,
            avgErr);
