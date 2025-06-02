@@ -41,16 +41,24 @@ __device__ void loadSmemA(float16_t* smem, const float16_t* A, int M, int K,
         //     OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD) *
         //     sizeof(float16_t);
 
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+1] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+1];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+2] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+2];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+3] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+3];
-        
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+4] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+4];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+5] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+5];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+6] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+6];
-        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+7] = A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+7];
-        
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+1] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+1];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+2] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+2];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+3] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+3];
+
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+4] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+4];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+5] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+5];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+6] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+6];
+        // smem[OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD)+7] =
+        // A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)+7];
+
         void* ptr =
             (void*) (smem + OFFSET(load_a_smem_m, load_a_smem_k, 32 + PAD));
         uint32_t smem_ptr;
@@ -92,15 +100,23 @@ __device__ void loadSmemB(float16_t* smem, const float16_t* B, int K, int N,
         //     OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD) *
         //     sizeof(float16_t);
 
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+1] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+1];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+2] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+2];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+3] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+3];
-        
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+4] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+4];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+5] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+5];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+6] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+6];
-        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+7] = B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+7];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+1] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+1];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+2] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+2];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+3] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+3];
+
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+4] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+4];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+5] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+5];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+6] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+6];
+        // smem[OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD)+7] =
+        // B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)+7];
 
         void* ptr =
             (void*) (smem + OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD));
@@ -114,7 +130,6 @@ __device__ void loadSmemB(float16_t* smem, const float16_t* B, int K, int N,
             : "r"(smem_ptr), "l"(&B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)]));
         // asm volatile("cp.async.commit_group;\n" ::);
         // asm volatile("cp.async.wait_all;\n" ::);
-
     }
 }
 
@@ -212,7 +227,7 @@ __global__ void gemm_fp16_v7(const float16_t* A, const float16_t* B,
     }
     // blockTiling
     for (int ko = 1; ko < K / KI; ko++) {
-        asm volatile("cp.async.wait_group %0;\n" ::"n"(1));
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
 
         __syncthreads();
 

@@ -22,4 +22,5 @@
         "--function-arg-placeholders=false",
     ],
     "clangd.onConfigChanged": "restart",
+    "editor.formatOnSave": true,
 }

@@ -190,16 +190,13 @@ __device__ void storeAccum(
     }
 }
 
-__global__ void gemm_fp16_v10(const float16_t* A, const float16_t* B,
+__global__ void gemm_fp16_v11(const float16_t* A, const float16_t* B,
                               float16_t* const C, int M, int N, int K)
 {
-
-    extern __shared__ uint8_t shared_storage[];
-
     extern __shared__ uint8_t shared_storage[];
     float16_t* SA = reinterpret_cast<float16_t*>(shared_storage);
     float16_t* SB = reinterpret_cast<float16_t*>(
-        shared_storage + 2 * MI * (KI + PAD) * sizeof(float16_t));
+        shared_storage + 3 * MI * (KI + PAD) * sizeof(float16_t));
 
     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK,
                            float16_t, nvcuda::wmma::row_major>
@@ -218,21 +215,32 @@ __global__ void gemm_fp16_v10(const float16_t* A, const float16_t* B,
         }
     }
 
+    int offset_SA = 0;
+    int offset_SB = 0;
+
     {
-        loadSmemA(SA, A, M, K, 0);
-        loadSmemB(SB, B, K, N, 0);
+        loadSmemA(SA + offset_SA, A, M, K, 0);
+        loadSmemB(SB + offset_SB, B, K, N, 0);
+        asm volatile("cp.async.commit_group;\n" ::);
+    }
+    offset_SA += MI * (KI + PAD);
+    offset_SB += KI * (NI + PAD);
+
+    {
+        loadSmemA(SA + offset_SA, A, M, K, 1);
+        loadSmemB(SB + offset_SB, B, K, N, 1);
         asm volatile("cp.async.commit_group;\n" ::);
     }
 
-    for (int ko = 1; ko < K / KI; ko++) {
-        asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
+    for (int ko = 2; ko < K / KI; ko++) {
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(1));
 
         __syncthreads();
 
-        int smem_sel = (ko - 1) & 1;
-        int smem_sel_next = ko & 1;
-        int offset_SA = smem_sel * MI * (KI + PAD);
-        int offset_SB = smem_sel * KI * (NI + PAD);
+        int smem_sel = (ko - 2) % 3;
+        int smem_sel_next = ko % 3;
+        offset_SA = smem_sel * MI * (KI + PAD);
+        offset_SB = smem_sel * KI * (NI + PAD);
 #pragma unroll
         for (int ki = 0; ki < KI / KII; ki++) {
             loadFragA(FragA, SA + offset_SA, ki);
@@ -256,10 +264,11 @@ __global__ void gemm_fp16_v10(const float16_t* A, const float16_t* B,
     }
 
     {
-        asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(1));
         __syncthreads();
-        int offset_SA = 1 * MI * (KI + PAD);
-        int offset_SB = 1 * KI * (NI + PAD);
+        int smem_sel = (K / KI - 2) % 3;
+        int offset_SA = smem_sel * MI * (KI + PAD);
+        int offset_SB = smem_sel * KI * (NI + PAD);
 #pragma unroll
         for (int ki = 0; ki < KI / KII; ki++) {
             loadFragA(FragA, SA + offset_SA, ki);
@@ -276,136 +285,29 @@ __global__ void gemm_fp16_v10(const float16_t* A, const float16_t* B,
             }
         }
     }
+    {
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
+        __syncthreads();
+        int smem_sel = (K / KI - 1) % 3;
+        int offset_SA = smem_sel * MI * (KI + PAD);
+        int offset_SB = smem_sel * KI * (NI + PAD);
+#pragma unroll
+        for (int ki = 0; ki < KI / KII; ki++) {
+            loadFragA(FragA, SA + offset_SA, ki);
+            loadFragB(FragB, SB + offset_SB, ki);
+#pragma unroll
+            for (int mii = 0; mii < MII / wmmaM; mii += 1) {
+#pragma unroll
+                for (int nii = 0; nii < NII / wmmaN; nii += 1) {
+                    // 16x16x16 for each wmma
+                    nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii],
+                                           FragA[mii], FragB[nii],
+                                           Accum[mii * (NII / wmmaN) + nii]);
+                }
+            }
+        }
+    }
+
     storeAccum(C, Accum, M, N);
 }
 }  // namespace playground
-
-// __global__ void gemm_fp16_v10(const float16_t* A, const float16_t* B,
-//                               float16_t* const C, int M, int N, int K)
-// {
-//     // A is row-major
-//     // B is col-major
-//     // 128 threads [x, y, z] = [32, 2, 2]
-//     // threadblock mma: 128x128x32
-//     // warp mma: 64x64x16
-//     extern __shared__ uint8_t shared_storage[];
-//     // float16_t* SA = reinterpret_cast<float16_t*>(shared_storage);
-//     // float16_t* SB = reinterpret_cast<float16_t*>(
-//     //     shared_storage + 2 * MI * KI * sizeof(float16_t));
-
-//     float16_t* SA1 = reinterpret_cast<float16_t*>(shared_storage);
-//     float16_t* SA2 = SA1 + MI * (KI + PAD);
-//     // float16_t* SA3 = SA2 + MI * (KI + PAD);
-//     //  float16_t* SA4 = SA3 + MI * (KI + PAD);
-
-//     float16_t* SB1 = SA2 + MI * (KI + PAD);
-//     float16_t* SB2 = SB1 + (NI + PAD) * KI;
-//     // float16_t* SB3 = SB2 + (NI + PAD) * KI;
-//     //  float16_t* SB4 = SB3 + (NI + PAD) * KI;
-
-//     float16_t* SA[] = {SA1, SA2};
-//     float16_t* SB[] = {SB1, SB2};
-
-//     nvcuda::wmma::fragment<nvcuda::wmma::matrix_a, wmmaM, wmmaN, wmmaK,
-//                            float16_t, nvcuda::wmma::row_major>
-//         FragA[MII / wmmaM];
-//     nvcuda::wmma::fragment<nvcuda::wmma::matrix_b, wmmaM, wmmaN, wmmaK,
-//                            float16_t, nvcuda::wmma::row_major>
-//         FragB[NII / wmmaN];
-//     nvcuda::wmma::fragment<nvcuda::wmma::accumulator, wmmaM, wmmaN, wmmaK,
-//                            float16_t>
-//         Accum[MII / wmmaM * NII / wmmaN];
-// #pragma unroll
-//     for (int mii = 0; mii < MII / wmmaM; mii += 1) {
-// #pragma unroll
-//         for (int nii = 0; nii < NII / wmmaN; nii += 1) {
-//             nvcuda::wmma::fill_fragment(Accum[mii * (NII / wmmaN) + nii],
-//             0.0);
-//         }
-//     }
-
-//     // for (int i = 0; i < 1; i++) {
-//     {
-//         loadSmemA(SA[0], A, M, K, 0);
-//         loadSmemB(SB[0], B, K, N, 0);
-//         asm volatile("cp.async.commit_group;\n" ::);
-//     }
-//     //}
-
-//     // {
-//     //     loadSmemA(SA, A, M, K, 0);
-//     //     loadSmemB(SB, B, K, N, 0);
-//     // }
-//     // blockTiling
-//     for (int ko = 1; ko < K / KI; ko++) {
-//         asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
-
-//         __syncthreads();
-
-//         for (int ki = 0; ki < KI / KII; ki++) {
-//             loadFragA(FragA, SA[(ko - 1) % 2], ki);
-//             loadFragB(FragB, SB[(ko - 1) % 2], ki);
-//             for (int mii = 0; mii < MII / wmmaM; mii += 1) {
-//                 for (int nii = 0; nii < NII / wmmaN; nii += 1) {
-//                     // 16x16x16 for each wmma
-//                     nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii],
-//                                            FragA[mii], FragB[nii],
-//                                            Accum[mii * (NII / wmmaN) +
-//                                            nii]);
-//                 }
-//             }
-//         }
-//         // if (ko + 1 < K / KI) {
-//         loadSmemA(SA[ko % 2], A, M, K, ko);
-//         loadSmemB(SB[ko % 2], B, K, N, ko);
-//         asm volatile("cp.async.commit_group;\n" ::);
-//         //}
-
-//         // asm volatile("cp.async.wait_all;\n" ::);
-//         // __syncthreads();
-//     }
-
-//     {
-//         asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
-//         __syncthreads();
-
-//         for (int ki = 0; ki < KI / KII; ki++) {
-//             loadFragA(FragA, SA[1], ki);
-//             loadFragB(FragB, SB[1], ki);
-//             for (int mii = 0; mii < MII / wmmaM; mii += 1) {
-//                 for (int nii = 0; nii < NII / wmmaN; nii += 1) {
-//                     // 16x16x16 for each wmma
-//                     nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN) + nii],
-//                                            FragA[mii], FragB[nii],
-//                                            Accum[mii * (NII / wmmaN) +
-//                                            nii]);
-//                 }
-//             }
-//         }
-//     }
-
-//     //     {
-//     //         int offset_SA = 1 * MI * (KI + PAD);
-//     //         int offset_SB = 1 * KI * (NI + PAD);
-//     // #pragma unroll
-//     //         for (int ki = 0; ki < KI / KII; ki++) {
-//     //             loadFragA(FragA, SA + offset_SA, ki);
-//     //             loadFragB(FragB, SB + offset_SB, ki);
-//     // #pragma unroll
-//     //             for (int mii = 0; mii < MII / wmmaM; mii += 1) {
-//     // #pragma unroll
-//     //                 for (int nii = 0; nii < NII / wmmaN; nii += 1) {
-//     //                     // 16x16x16 for each wmma
-//     //                     nvcuda::wmma::mma_sync(Accum[mii * (NII / wmmaN)
-//     +
-//     //                     nii],
-//     //                                            FragA[mii], FragB[nii],
-//     //                                            Accum[mii * (NII / wmmaN)
-//     +
-//     //                                            nii]);
-//     //                 }
-//     //             }
-//     //         }
-//     //     }
-//     storeAccum(C, Accum, M, N);
-// }
