@@ -24,6 +24,7 @@ target_compile_definitions(
 target_include_directories(
     ${TARGET_NAME} PRIVATE 
     ${PROJECT_SOURCE_DIR}/include
+    ${CXXOPTS_INCLUDE_DIRS}
 )
 
 target_link_libraries(
@@ -31,9 +32,10 @@ target_link_libraries(
     CUDA::cudart 
     CUDA::cublas
     OpenBLAS::OpenBLAS
-    cxxopts::cxxopts
     nvidia::cutlass::cutlass
 )
+
+
 
 set(TARGET_BIN_OUTPUT_NAME "${TARGET_NAME}_${TEST_DATA_TYPE}_v${MATMUL_VERSION}")
 set_target_properties(

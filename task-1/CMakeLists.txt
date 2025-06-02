@@ -6,6 +6,7 @@ project(Playground-Task1)
 include(${PROJECT_SOURCE_DIR}/cmake/utils/common.cmake)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_TOOLCHAIN_FILE "/usr/local/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
 set_default_values(
     PROJECT_NAMESPACE "pmpp::"
@@ -21,7 +22,7 @@ include(${PROJECT_SOURCE_DIR}/cmake/compilers/cuda-compiler-configs.cmake)
 include(${PROJECT_SOURCE_DIR}/cmake/libraries/libcuda.cmake)
 
 find_package(OpenBLAS CONFIG REQUIRED)
-find_package(cxxopts CONFIG REQUIRED)
+find_path(CXXOPTS_INCLUDE_DIRS "cxxopts.hpp")
 find_package(NvidiaCutlass CONFIG REQUIRED)
 
 add_subdirectory(src)
