@@ -2,14 +2,14 @@
 // #include <cuda_runtime.h>
 // #include <library_types.h>
 
-// #include "../xmx/fp16/fp16_v12.cuh"
+// #include "../xmx/fp16/fp16_v14.cuh"
 // #include "playground/matmul.hpp"
 // #include "playground/static.hpp"
 // #include "playground/system.hpp"
 // #include <cstdio>
 // namespace playground
 // {
-// PLAYGROUND_MATMUL_DEC(float16_t, 12, M, N, K, A, B, C)
+// PLAYGROUND_MATMUL_DEC(float16_t, 14, M, N, K, A, B, C)
 // {
 
 //     dim3 dimBlock(32, 2, 2);
@@ -19,10 +19,10 @@
 //     if (err != cudaSuccess) {
 //         printf("CUDA Error before kernel: %s\n", cudaGetErrorString(err));
 //     }
-//     cudaFuncSetAttribute(gemm_fp16_v12,
+//     cudaFuncSetAttribute(gemm_fp16_v14,
 //                          cudaFuncAttributeMaxDynamicSharedMemorySize,
 //                          131072);
-//     gemm_fp16_v12<<<dimGrid, dimBlock, smem_size>>>(A, B, C, M, N, K);
+//     gemm_fp16_v14<<<dimGrid, dimBlock, smem_size>>>(A, B, C, M, N, K);
 
 //     err = cudaDeviceSynchronize();
 //     if (err != cudaSuccess) {

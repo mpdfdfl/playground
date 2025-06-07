@@ -46,13 +46,14 @@ __device__ void loadSmemA(float16_t* smem, const float16_t* A, int M, int K,
 
         void* ptr = (void*) (smem + OFFSET(load_a_smem_m, load_a_smem_k, 32));
         uint32_t smem_ptr;
-        asm("{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; "
-            "cvt.u32.u64 %0, smem_ptr; }\n"
-            : "=r"(smem_ptr)
-            : "l"(ptr));
-        asm("cp.async.ca.shared.global [%0], [%1], 16;\n"
-            :
-            : "r"(smem_ptr), "l"(&A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)]));
+        asm volatile("{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; "
+                     "cvt.u32.u64 %0, smem_ptr; }\n"
+                     : "=r"(smem_ptr)
+                     : "l"(ptr));
+        asm volatile("cp.async.ca.shared.global [%0], [%1], 16;\n"
+                     :
+                     : "r"(smem_ptr),
+                       "l"(&A[OFFSET(load_a_gmem_m, load_a_gmem_k, K)]));
     }
 }
 
@@ -78,21 +79,16 @@ __device__ void loadSmemB(float16_t* smem, const float16_t* B, int K, int N,
         int load_b_gmem_n = bx * 128 + load_b_smem_n;
 
         load_b_smem_n = load_b_smem_n ^ (((load_b_smem_k & 3) << 3));
-
-        // int load_b_smem_addr =
-        //     s_b_base_addr +
-        //     OFFSET(load_b_smem_k, load_b_smem_n, 128 + PAD) *
-        //     sizeof(float16_t);
         void* ptr = (void*) (smem + OFFSET(load_b_smem_k, load_b_smem_n, 128));
         uint32_t smem_ptr;
-        asm("{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; "
-            "cvt.u32.u64 %0, smem_ptr; }\n"
-            : "=r"(smem_ptr)
-            : "l"(ptr));
-        asm("cp.async.ca.shared.global [%0], [%1], 16;\n"
-            :
-            : "r"(smem_ptr), "l"(&B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)]));
-        // asm volatile("cp.async.commit_group;\n" ::);
+        asm volatile("{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; "
+                     "cvt.u32.u64 %0, smem_ptr; }\n"
+                     : "=r"(smem_ptr)
+                     : "l"(ptr));
+        asm volatile("cp.async.ca.shared.global [%0], [%1], 16;\n"
+                     :
+                     : "r"(smem_ptr),
+                       "l"(&B[OFFSET(load_b_gmem_k, load_b_gmem_n, N)]));
     }
 }
 
@@ -103,19 +99,18 @@ __device__ void loadFragA(unsigned int* frag, float16_t* smem, int ki)
     int tz = threadIdx.z;
 
     for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 2; j++) {
-            for (int k = 0; k < 2; k++) {
-                int row = tz * 64 + i * 16 + j * 8 + tx / 4;
-                int col = ki * KII + k * 8 + (tx % 4) * 2;
+        int row = tz * 64 + tx % 16;
+        int col = ki * KII + (tx / 16) * 8;
+        col = col ^ (((row & 3) << 3));
 
-                col = col ^ ((row & 3) << 3);
+        uint32_t smem_base = __cvta_generic_to_shared(smem + row * 32 + col);
 
-                unsigned int* ptr =
-                    reinterpret_cast<unsigned int*>(smem + row * 32 + col);
-                // frag[i * 4 + j * 2 + k] = ptr[0];
-                frag[i * 4 + j * 2 + k] = 1;
-            }
-        }
+        asm volatile(
+            "ldmatrix.sync.aligned.m8n8.x4.shared.b16 { %0, %1, %2, %3 }, [ "
+            "%4 ];\n"
+            : "=r"(frag[i * 4]), "=r"(frag[i * 4 + 1]), "=r"(frag[i * 4 + 2]),
+              "=r"(frag[i * 4 + 3])
+            : "r"(smem_base));
     }
 }
 
@@ -126,26 +121,21 @@ __device__ void loadFragB(unsigned int* frag, float16_t* smem, int ki)
     int tx = threadIdx.x;
 
     for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 2; j++) {
-            for (int k = 0; k < 2; k++) {
-                int row = ki * 32 + tx % 4 * 2;
-                int col = ty * 64 + 16 * i + j * 8 + tx / 4;
 
-                int col1 = col ^ ((row & 3) << 3);
-                int col2 = col ^ (((row + 1) & 3) << 3);
-                // 从 smem 读取 (row, col) 和 (row + 1, col) 的 fp16 值
-                float16_t fp16_1 = smem[OFFSET(row, col1, 128)];
-                float16_t fp16_2 = smem[OFFSET(row + 1, col2, 128)];
+        int row = ki * 16 + tx % 16;
+        int col = ty * 64 + i * 16 + (tx / 16) * 8;
+        col = col ^ (((row & 3) << 3));
 
-                // 将 fp16 转换为 uint16_t 以获取位模式
-                uint16_t bits_1 = *reinterpret_cast<uint16_t*>(&fp16_1);
-                uint16_t bits_2 = *reinterpret_cast<uint16_t*>(&fp16_2);
+        uint32_t smem_base = __cvta_generic_to_shared(smem + row * 128 + col);
 
-                // 合并为 unsigned int：bits_1 占高 16 位，bits_2 占低 16 位
-                frag[i * 4 + j * 2 + k] =
-                    (static_cast<unsigned int>(bits_1) << 16) | bits_2;
-            }
-        }
+        asm volatile(
+            "ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 { %0, %1, %2, %3 "
+            "}, "
+            "[ %4 "
+            "];\n"
+            : "=r"(frag[i * 4]), "=r"(frag[i * 4 + 1]), "=r"(frag[i * 4 + 2]),
+              "=r"(frag[i * 4 + 3])
+            : "r"(smem_base));
     }
 }
 
@@ -204,13 +194,13 @@ __device__ void storeAccum(float16_t* ptr, float32_t* frag, int M, int N)
     }
 }
 
-__global__ void gemm_fp16_v12(const float16_t* A, const float16_t* B,
+__global__ void gemm_fp16_v14(const float16_t* A, const float16_t* B,
                               float16_t* const C, int M, int N, int K)
 {
     extern __shared__ uint8_t shared_storage[];
     float16_t* SA = reinterpret_cast<float16_t*>(shared_storage);
     float16_t* SB = reinterpret_cast<float16_t*>(
-        shared_storage + 3 * MI * KI * sizeof(float16_t));
+        shared_storage + 4 * MI * KI * sizeof(float16_t));
 
     unsigned int FragA[4 * 4];
     unsigned int FragB[4 * 2 * 2];
@@ -232,14 +222,21 @@ __global__ void gemm_fp16_v12(const float16_t* A, const float16_t* B,
         loadSmemB(SB + offset_SB, B, K, N, 1);
         asm volatile("cp.async.commit_group;\n" ::);
     }
+    offset_SA += MI * KI;
+    offset_SB += KI * NI;
 
-    for (int ko = 2; ko < K / KI; ko++) {
+    {
+        loadSmemA(SA + offset_SA, A, M, K, 2);
+        loadSmemB(SB + offset_SB, B, K, N, 2);
+        asm volatile("cp.async.commit_group;\n" ::);
+    }
+    for (int ko = 3; ko < K / KI; ko++) {
 
-        asm volatile("cp.async.wait_group %0;\n" ::"n"(1));
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(2));
         __syncthreads();
 
-        int smem_sel = (ko - 2) % 3;
-        int smem_sel_next = ko % 3;
+        int smem_sel = (ko - 3) % 4;
+        int smem_sel_next = ko % 4;
         offset_SA = smem_sel * MI * (KI);
         offset_SB = smem_sel * KI * (NI);
 
@@ -260,9 +257,29 @@ __global__ void gemm_fp16_v12(const float16_t* A, const float16_t* B,
         asm volatile("cp.async.commit_group;\n" ::);
     }
     {
+        asm volatile("cp.async.wait_group %0;\n" ::"n"(2));
+        __syncthreads();
+        int smem_sel = (K / KI - 3) % 4;
+        int offset_SA = smem_sel * MI * KI;
+        int offset_SB = smem_sel * KI * NI;
+#pragma unroll
+        for (int ki = 0; ki < KI / KII; ki++) {
+            loadFragA(FragA, SA + offset_SA, ki);
+            loadFragB(FragB, SB + offset_SB, ki);
+#pragma unroll
+            for (int mii = 0; mii < MII / wmmaM; mii += 1) {
+#pragma unroll
+                for (int nii = 0; nii < NII / wmmaN; nii += 1) {
+                    mmaSync(FragA + mii * 4, FragB + nii * 4,
+                            Accum + mii * 4 * 8 + nii * 8);
+                }
+            }
+        }
+    }
+    {
         asm volatile("cp.async.wait_group %0;\n" ::"n"(1));
         __syncthreads();
-        int smem_sel = (K / KI - 2) % 3;
+        int smem_sel = (K / KI - 2) % 4;
         int offset_SA = smem_sel * MI * KI;
         int offset_SB = smem_sel * KI * NI;
 #pragma unroll
@@ -282,7 +299,7 @@ __global__ void gemm_fp16_v12(const float16_t* A, const float16_t* B,
     {
         asm volatile("cp.async.wait_group %0;\n" ::"n"(0));
         __syncthreads();
-        int smem_sel = (K / KI - 1) % 3;
+        int smem_sel = (K / KI - 1) % 4;
         int offset_SA = smem_sel * MI * KI;
         int offset_SB = smem_sel * KI * NI;
 #pragma unroll
@@ -299,7 +316,6 @@ __global__ void gemm_fp16_v12(const float16_t* A, const float16_t* B,
             }
         }
     }
-
     storeAccum(C, Accum, M, N);
 }
 }  // namespace playground
