@@ -29,7 +29,7 @@ __global__ void gemm_fp16_v17(const float16_t* A, const float16_t* B,
 
     uint32_t FragA[4][4];
     uint32_t FragB[4][4];
-    uint32_t Accum[4][4][4];
+    uint32_t Accum[4][4][4] = {0};
 
     size_t bid = blockIdx.x + gridDim.x * blockIdx.y;
     // block swizzing
@@ -539,22 +539,13 @@ __global__ void gemm_fp16_v17(const float16_t* A, const float16_t* B,
 
     for (int i = 0; i < 4; ++i) {
         for (int j = 0; j < 4; ++j) {
-            Accum[i][j][0] = 12389161;
-            Accum[i][j][1] = 12389161 + i - j;
-            Accum[i][j][2] = 12389161 - j;
-            Accum[i][j][3] = 12389161 + i;
 
             int row = by * 256 + tz * 64 + i * 16 + tx / 4;
             int col = bx * 128 + ty * 64 + j * 16 + (tx % 4) * 2;
 
             (reinterpret_cast<uint32_t*>(&C[OFFSET(row, col, N)]))[0] =
                 Accum[i][j][0];
-            // C[OFFSET(row, col + 1, N)] = float16_t(frag_base[1]);
-            // if (tid == 0) {
-            //     printf("%d  % d : %f %f\n", row, col,
-            //            float(C[OFFSET(row, col, N)]),
-            //            float(C[OFFSET(row, col + 1, N)]));
-            // }
+
             (reinterpret_cast<uint32_t*>(&C[OFFSET(row + 8, col, N)]))[0] =
                 Accum[i][j][1];
 
@@ -563,18 +554,6 @@ __global__ void gemm_fp16_v17(const float16_t* A, const float16_t* B,
 
             (reinterpret_cast<uint32_t*>(&C[OFFSET(row + 8, col + 8, N)]))[0] =
                 Accum[i][j][3];
-            // (reinterpret_cast<uint32_t*>(&C[OFFSET(row, col, N)]))[0] = 0;
-            // // C[OFFSET(row, col + 1, N)] = float16_t(frag_base[1]);
-
-            // (reinterpret_cast<uint32_t*>(&C[OFFSET(row + 8, col, N)]))[0] =
-            // 0;
-
-            // (reinterpret_cast<uint32_t*>(&C[OFFSET(row, col + 8, N)]))[0] =
-            // 0;
-
-            // (reinterpret_cast<uint32_t*>(&C[OFFSET(row + 8, col + 8,
-            // N)]))[0] =
-            //     0;
         }
     }
 }
