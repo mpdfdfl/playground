@@ -92,7 +92,6 @@ void test(uint32_t m, uint32_t n, uint32_t k, uint32_t nWarmupRound,
 
 auto main(int argc, const char* argv[]) -> int
 {
-    cudaSetDevice(1);
     auto options =
         cxxopts::Options(TARGET_BIN_OUTPUT_NAME,
                          "Playground Task1: General Matrix Multiplication");
