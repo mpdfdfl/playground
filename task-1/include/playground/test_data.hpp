@@ -1,14 +1,15 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <random>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
 #include "playground/matmul.hpp"
 #include "playground/system.hpp"
 #include "playground/utils.hpp"
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <random>
-#include <stdexcept>
-#include <vector>
 
 namespace playground
 {
@@ -130,6 +131,15 @@ public:
         return _d_C.get_mutable_raw_ptr();
     }
 
+    void transpose_b()
+    {
+        for (size_t i = 0; i < _k; i++) {
+            for (size_t j = 0; j < i; j++) {
+                std::swap(_B[i * _m + j], _B[j * _k + i]);
+            }
+        }
+    }
+
     void initHostData()
     {
         _A.resize(_m * _k);
@@ -141,8 +151,6 @@ public:
         std::normal_distribution<float64_t> distrib(0.0, 1.0);
         std::ranges::generate(_A, [&]() { return distrib(gen); });
         std::ranges::generate(_B, [&]() { return distrib(gen); });
-        // std::ranges::fill(_A, 1.0);
-        // std::ranges::fill(_B, 1.0);
     }
 
     auto calculateAvgErr() -> float32_t
@@ -151,12 +159,9 @@ public:
         float32_t errSum = 0.0;
         float32_t avgErr = 0.0;
 
-        // int cnt = 0;
-
         for (size_t i = 0; i < _GT.size(); ++i) {
             gap = float32_t(_GT[i]) - float32_t(_C[i]);
             errSum += ::std::abs(gap / float32_t(_GT[i]));
-
             PLAYGROUND_CHECK(!::std::isinf(errSum));
             PLAYGROUND_CHECK(!::std::isnan(errSum));
         }
@@ -188,6 +193,7 @@ public:
         cudaMemcpy(_d_A.get_mutable_raw_ptr(), _A.data(),
                    _A.size() * sizeof(params::DataType),
                    cudaMemcpyHostToDevice);
+        // transpose_b();
         cudaMemcpy(_d_B.get_mutable_raw_ptr(), _B.data(),
                    _B.size() * sizeof(params::DataType),
                    cudaMemcpyHostToDevice);
