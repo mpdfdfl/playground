@@ -72,9 +72,7 @@ __global__ void hgemm_mma_stage_v2(const float16_t* __restrict__ A,
     // size_t by = ((bid / 32) % 2) ? (15 - ((bid % 32) / 2)) : ((bid % 32) /
     // 2);
 
-    const size_t block_tile_i =
-        (blockIdx.z % 2) ? ((gridDim.y - blockIdx.y - 1) * BLOCK_COL_TILES)
-                         : (blockIdx.y * BLOCK_COL_TILES);
+    const size_t block_tile_i = (blockIdx.y * BLOCK_COL_TILES);
     const size_t block_tile_j =
         (blockIdx.z * gridDim.x + blockIdx.x) * BLOCK_ROW_TILES;
 
@@ -396,7 +394,7 @@ __global__ void hgemm_mma_stage_v2(const float16_t* __restrict__ A,
         A_smem_idx += lane_id / CHUNK_COPY_LINE_LANES;
 
 #pragma unroll
-        for (size_t i = 0; i < A_smem_iters / CHUNK_K; ++i) {
+        for (size_t i = 0; i < A_smem_iters; ++i) {
             uint32_t A_smem_lane_addr =
                 __cvta_generic_to_shared(&smem[A_smem_idx][0]) +
                 ((lane_id % CHUNK_COPY_LINE_LANES +
@@ -420,46 +418,7 @@ __global__ void hgemm_mma_stage_v2(const float16_t* __restrict__ A,
         B_smem_idx += lane_id / CHUNK_COPY_LINE_LANES;
 
 #pragma unroll
-        for (size_t i = 0; i < B_smem_iters / CHUNK_K; ++i) {
-            uint32_t B_smem_lane_addr =
-                __cvta_generic_to_shared(&smem[B_smem_idx][0]) +
-                ((lane_id % CHUNK_COPY_LINE_LANES +
-                  (B_smem_idx % (CHUNK_COPY_LINE_LANES * SMEM_BANK_ROWS)) /
-                      SMEM_BANK_ROWS) %
-                 CHUNK_COPY_LINE_LANES) *
-                    THREAD_COPY_BYTES;
-
-            CP_ASYNC_CG(B_smem_lane_addr, B_lane_ptr, THREAD_COPY_BYTES);
-
-            B_lane_ptr = (int4*) ((float16_t*) B_lane_ptr +
-                                  CHUNK_COPY_LINES_PER_WARP * K);
-            B_smem_idx += CHUNK_COPY_LINES_PER_WARP;
-        }
-
-        smem_load_idx = (smem_load_idx + 1) % K_STAGE;
-        smem_load_off = smem_load_idx * smem_stage_off;
-
-#pragma unroll
-        for (size_t i = (CHUNK_K - 1) * A_smem_iters / CHUNK_K;
-             i < A_smem_iters; ++i) {
-            uint32_t A_smem_lane_addr =
-                __cvta_generic_to_shared(&smem[A_smem_idx][0]) +
-                ((lane_id % CHUNK_COPY_LINE_LANES +
-                  (A_smem_idx % (CHUNK_COPY_LINE_LANES * SMEM_BANK_ROWS)) /
-                      SMEM_BANK_ROWS) %
-                 CHUNK_COPY_LINE_LANES) *
-                    THREAD_COPY_BYTES;
-
-            CP_ASYNC_CG(A_smem_lane_addr, A_lane_ptr, THREAD_COPY_BYTES);
-
-            A_lane_ptr = (int4*) ((float16_t*) A_lane_ptr +
-                                  CHUNK_COPY_LINES_PER_WARP * K);
-            A_smem_idx += CHUNK_COPY_LINES_PER_WARP;
-        }
-
-#pragma unroll
-        for (size_t i = (CHUNK_K - 1) * B_smem_iters / CHUNK_K;
-             i < B_smem_iters; ++i) {
+        for (size_t i = 0; i < B_smem_iters; ++i) {
             uint32_t B_smem_lane_addr =
                 __cvta_generic_to_shared(&smem[B_smem_idx][0]) +
                 ((lane_id % CHUNK_COPY_LINE_LANES +
@@ -479,6 +438,8 @@ __global__ void hgemm_mma_stage_v2(const float16_t* __restrict__ A,
         CP_ASYNC_WAIT_GROUP(2);
 
         __syncthreads();
+        smem_load_idx = (smem_load_idx + 1) % K_STAGE;
+        smem_load_off = smem_load_idx * smem_stage_off;
 
         reg_store_idx ^= 1;
         reg_load_idx ^= 1;
@@ -761,6 +722,11 @@ __global__ void hgemm_mma_stage_v2(const float16_t* __restrict__ A,
                   (C_SMEM_STRIDE * sizeof(float16_t) / THREAD_COPY_BYTES));
     }
 }
+
+// __global__ void trans_B(float16_t* B, size_t K, size_t N)
+// {
+
+// }
 
 PLAYGROUND_MATMUL_DEC(float16_t, 20, M, N, K, A, B, C)
 {
